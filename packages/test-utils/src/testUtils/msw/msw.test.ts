@@ -18,10 +18,20 @@ import { msw } from './index';
 
 describe('msw', () => {
   describe('setupDefaultHandlers', () => {
-    const createMockWorker = () => ({
-      listen: jest.fn(),
-      close: jest.fn(),
-      resetHandlers: jest.fn(),
+    let beforeAllSpy: jest.SpyInstance;
+    let afterAllSpy: jest.SpyInstance;
+    let afterEachSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      beforeAllSpy = jest.spyOn(global, 'beforeAll');
+      afterAllSpy = jest.spyOn(global, 'afterAll');
+      afterEachSpy = jest.spyOn(global, 'afterEach');
+    });
+
+    afterEach(() => {
+      beforeAllSpy.mockRestore();
+      afterAllSpy.mockRestore();
+      afterEachSpy.mockRestore();
     });
 
     it('should export msw object with setupDefaultHandlers function', () => {
@@ -30,33 +40,43 @@ describe('msw', () => {
       expect(typeof msw.setupDefaultHandlers).toBe('function');
     });
 
-    it('should be a function that accepts a worker with required methods', () => {
-      const worker = createMockWorker();
-
-      // The function should be callable and not throw
-      expect(() => msw.setupDefaultHandlers(worker)).not.toThrow();
-    });
-
-    it('should accept worker with listen, close, and resetHandlers methods', () => {
-      const validWorker = {
-        listen: jest.fn(),
-        close: jest.fn(),
-        resetHandlers: jest.fn(),
+    it('should set up Jest lifecycle hooks with correct handlers', () => {
+      const mockListen = jest.fn();
+      const mockClose = jest.fn();
+      const mockResetHandlers = jest.fn();
+      const worker = { 
+        listen: mockListen, 
+        close: mockClose, 
+        resetHandlers: mockResetHandlers 
       };
 
-      // Should not throw with valid worker
-      msw.setupDefaultHandlers(validWorker);
-    });
+      msw.setupDefaultHandlers(worker);
 
-    it('should not throw when worker methods are functions', () => {
-      const worker = {
-        listen: () => {},
-        close: () => {},
-        resetHandlers: () => {},
-      };
+      // Verify beforeAll was called with a function
+      expect(beforeAllSpy).toHaveBeenCalledTimes(1);
+      const beforeAllCallback = beforeAllSpy.mock.calls[0][0] as Function;
+      
+      // Simulate beforeAll execution by calling the callback
+      beforeAllCallback();
+      
+      // Verify worker.listen was called with the correct options
+      expect(mockListen).toHaveBeenCalledWith({ onUnhandledRequest: 'error' });
 
-      // Function type check passes at runtime
-      expect(msw.setupDefaultHandlers(worker)).toBeUndefined();
+      // Verify afterAll was called with a function
+      expect(afterAllSpy).toHaveBeenCalledTimes(1);
+      const afterAllCallback = afterAllSpy.mock.calls[0][0] as Function;
+      
+      // Simulate afterAll execution
+      afterAllCallback();
+      expect(mockClose).toHaveBeenCalledTimes(1);
+
+      // Verify afterEach was called with a function
+      expect(afterEachSpy).toHaveBeenCalledTimes(1);
+      const afterEachCallback = afterEachSpy.mock.calls[0][0] as Function;
+      
+      // Simulate afterEach execution
+      afterEachCallback();
+      expect(mockResetHandlers).toHaveBeenCalledTimes(1);
     });
   });
 });
